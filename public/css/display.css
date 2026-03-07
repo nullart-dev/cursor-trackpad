@@ -191,11 +191,6 @@ header p {
     color: rgba(0, 0, 0, 0.6);
 }
 
-/* Inverse card - needs isolation for mix-blend-mode to work */
-.card[data-cursor="-inverse"] {
-    isolation: isolate;
-}
-
 /* Image Grid */
 .image-grid {
     display: grid;
@@ -255,59 +250,23 @@ header p {
     background: rgba(255, 255, 255, 0.3);
 }
 
-/* ==================== Mouse Follower Customizations ==================== */
-
+/* Mouse Follower Customizations */
 .mf-cursor {
     z-index: 10000;
-    pointer-events: none;
 }
 
-/* Inverse state - cursor becomes white with difference blend */
-.mf-cursor.-inverse {
+/* Custom cursor states */
+.mf-cursor.-inverse .mf-cursor-inner {
+    background: #fff;
     mix-blend-mode: difference;
 }
 
-.mf-cursor.-inverse .mf-cursor-inner {
-    background: #fff !important;
-}
-
-/* Exclusion state */
 .mf-cursor.-exclusion {
     mix-blend-mode: exclusion;
 }
 
-.mf-cursor.-exclusion .mf-cursor-inner {
-    background: #fff !important;
-}
-
-/* Media state */
 .mf-cursor.-media .mf-cursor-inner {
     background: transparent;
-}
-
-/* Active/click state */
-.mf-cursor.-active .mf-cursor-inner {
-    transform: scale(0.8);
-}
-
-/* Pointer state - slightly larger */
-.mf-cursor.-pointer .mf-cursor-inner {
-    transform: scale(1.2);
-}
-
-/* Hidden state */
-.mf-cursor.-hidden {
-    opacity: 0;
-    visibility: hidden;
-}
-
-/* Text state adjustments */
-.mf-cursor.-text .mf-cursor-inner {
-    background: rgba(0, 0, 0, 0.8);
-}
-
-.mf-cursor.-text .mf-cursor-text {
-    color: #fff;
 }
 
 /* Responsive */
