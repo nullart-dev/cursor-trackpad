@@ -11,19 +11,27 @@ class Display {
         this.cursorY = window.innerHeight / 2;
         this.isConnected = false;
 
+        // Hover tracking
+        this.lastHoveredElement = null;
+        this.currentStickTarget = null;
+        this.currentTextTarget = null;
+        this.currentImgTarget = null;
+        this.currentStateTarget = null;
+
+        // Smooth scrolling
+        this.scrollVelocityX = 0;
+        this.scrollVelocityY = 0;
+        this.scrollFriction = 0.92;
+        this.scrollMultiplier = 2.5;
+        this.isScrolling = false;
+        this.currentScrollTarget = null;
+
         // Mouse follower instance
         this.cursor = null;
-        this.cursorEl = null;
 
         // WebSocket
         this.ws = null;
         this.reconnectAttempts = 0;
-
-        // Hover tracking
-        this.lastHoveredElement = null;
-        this.wasSticking = false;
-        this.hadText = false;
-        this.hadImg = false;
 
         this.init();
     }
@@ -32,6 +40,8 @@ class Display {
         this.initMouseFollower();
         this.connectWebSocket();
         this.bindEvents();
+        this.startScrollLoop();
+        this.startHoverLoop();
     }
 
     // ==================== Mouse Follower Setup ====================
@@ -53,18 +63,11 @@ class Display {
             stickDelta: 0.15,
             showTimeout: 0,
             hideOnLeave: false,
-            stateDetection: {
-                '-pointer': 'a, button, .demo-btn, .demo-link, .card, .image-item',
-            }
+            stateDetection: false  // We'll handle this manually for virtual cursor
         });
 
-        // Get cursor element reference
-        this.cursorEl = document.querySelector('.mf-cursor');
-
-        // Set initial position immediately (no animation)
-        if (this.cursorEl) {
-            gsap.set(this.cursorEl, { x: this.cursorX, y: this.cursorY });
-        }
+        // Set initial position
+        this.moveCursor(this.cursorX, this.cursorY);
 
         // Listen to cursor events
         this.cursor.on('render', () => {
@@ -158,7 +161,6 @@ class Display {
         this.cursorY = Math.max(0, Math.min(window.innerHeight, this.cursorY + deltaY));
 
         this.moveCursor(this.cursorX, this.cursorY);
-        this.checkHoverState();
     }
 
     handleClick(button = 'left') {
@@ -171,21 +173,24 @@ class Display {
         
         if (element) {
             if (button === 'left') {
-                // Simulate click
-                const clickEvent = new MouseEvent('click', {
-                    bubbles: true,
-                    cancelable: true,
-                    clientX: this.cursorX,
-                    clientY: this.cursorY
+                // Simulate full click sequence
+                const events = ['mousedown', 'mouseup', 'click'];
+                events.forEach(eventType => {
+                    const event = new MouseEvent(eventType, {
+                        bubbles: true,
+                        cancelable: true,
+                        view: window,
+                        clientX: this.cursorX,
+                        clientY: this.cursorY
+                    });
+                    element.dispatchEvent(event);
                 });
-                element.dispatchEvent(clickEvent);
 
                 // Also trigger focus for interactive elements
-                if (element.matches('button, a, input, select, textarea')) {
+                if (element.matches('button, a, input, select, textarea, [tabindex]')) {
                     element.focus();
                 }
             } else if (button === 'right') {
-                // Simulate context menu (optional)
                 const contextEvent = new MouseEvent('contextmenu', {
                     bubbles: true,
                     cancelable: true,
@@ -211,25 +216,49 @@ class Display {
         }
     }
 
+    // ==================== Smooth Scrolling ====================
+
     handleScroll(deltaX, deltaY) {
+        // Add to velocity for momentum
+        this.scrollVelocityX += deltaX * this.scrollMultiplier;
+        this.scrollVelocityY += deltaY * this.scrollMultiplier;
+        
         // Find scrollable element under cursor
         const element = document.elementFromPoint(this.cursorX, this.cursorY);
-        const scrollable = this.findScrollableParent(element);
+        this.currentScrollTarget = this.findScrollableParent(element);
+    }
 
-        if (scrollable) {
-            scrollable.scrollBy({
-                top: deltaY,
-                left: deltaX,
-                behavior: 'auto'
-            });
-        } else {
-            // Scroll the main window
-            window.scrollBy({
-                top: deltaY,
-                left: deltaX,
-                behavior: 'auto'
-            });
-        }
+    startScrollLoop() {
+        const scrollLoop = () => {
+            // Apply friction
+            this.scrollVelocityX *= this.scrollFriction;
+            this.scrollVelocityY *= this.scrollFriction;
+
+            // Apply scroll if velocity is significant
+            if (Math.abs(this.scrollVelocityX) > 0.5 || Math.abs(this.scrollVelocityY) > 0.5) {
+                if (this.currentScrollTarget) {
+                    this.currentScrollTarget.scrollBy({
+                        top: this.scrollVelocityY,
+                        left: this.scrollVelocityX,
+                        behavior: 'auto'
+                    });
+                } else {
+                    window.scrollBy({
+                        top: this.scrollVelocityY,
+                        left: this.scrollVelocityX,
+                        behavior: 'auto'
+                    });
+                }
+            } else {
+                // Stop completely when velocity is very low
+                this.scrollVelocityX = 0;
+                this.scrollVelocityY = 0;
+            }
+
+            requestAnimationFrame(scrollLoop);
+        };
+
+        requestAnimationFrame(scrollLoop);
     }
 
     findScrollableParent(element) {
@@ -260,73 +289,84 @@ class Display {
     // ==================== Cursor Movement ====================
 
     moveCursor(x, y) {
-        if (!this.cursorEl) {
-            this.cursorEl = document.querySelector('.mf-cursor');
-        }
+        // Get the cursor element
+        const cursorEl = document.querySelector('.mf-cursor');
         
-        if (this.cursorEl) {
-            // Kill any existing animations to prevent conflicts
-            gsap.killTweensOf(this.cursorEl);
-            
-            // Animate to new position from CURRENT position (not from 0,0)
-            gsap.to(this.cursorEl, {
+        if (cursorEl) {
+            // Use GSAP for smooth animation
+            gsap.to(cursorEl, {
                 x: x,
                 y: y,
-                duration: 0.15,  // Shorter duration for more responsive feel
-                ease: 'power2.out',
-                overwrite: 'auto'  // Automatically handle conflicting tweens
+                duration: 0.55,
+                ease: 'expo.out',
+                overwrite: true
             });
         }
     }
 
-    // ==================== Hover State Detection ====================
+    // ==================== Continuous Hover Detection ====================
+
+    startHoverLoop() {
+        const hoverLoop = () => {
+            this.checkHoverState();
+            requestAnimationFrame(hoverLoop);
+        };
+        requestAnimationFrame(hoverLoop);
+    }
 
     checkHoverState() {
         const element = document.elementFromPoint(this.cursorX, this.cursorY);
         
-        if (!element) return;
+        if (!element) {
+            this.clearAllStates();
+            return;
+        }
 
-        // Trigger mouseenter/mouseleave for state detection
+        // Simulate mouse events for proper hover
         this.simulateHover(element);
 
-        // Check for data attributes
+        // Check for cursor attributes
         this.checkCursorAttributes(element);
     }
 
     simulateHover(element) {
-        // Store last hovered element
+        // Mouse leave old element
         if (this.lastHoveredElement && this.lastHoveredElement !== element) {
-            // Mouse leave old element
-            const leaveEvent = new MouseEvent('mouseleave', {
-                bubbles: false,
-                cancelable: true,
-                clientX: this.cursorX,
-                clientY: this.cursorY
-            });
-            this.lastHoveredElement.dispatchEvent(leaveEvent);
+            // Check if we're leaving to a child or parent
+            const isRelated = this.lastHoveredElement.contains(element) || element.contains(this.lastHoveredElement);
             
-            // Also dispatch mouseout for bubbling
-            const outEvent = new MouseEvent('mouseout', {
-                bubbles: true,
-                cancelable: true,
-                clientX: this.cursorX,
-                clientY: this.cursorY,
-                relatedTarget: element
-            });
-            this.lastHoveredElement.dispatchEvent(outEvent);
+            if (!isRelated) {
+                const leaveEvent = new MouseEvent('mouseleave', {
+                    bubbles: false,
+                    cancelable: true,
+                    clientX: this.cursorX,
+                    clientY: this.cursorY,
+                    relatedTarget: element
+                });
+                this.lastHoveredElement.dispatchEvent(leaveEvent);
+
+                const outEvent = new MouseEvent('mouseout', {
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: this.cursorX,
+                    clientY: this.cursorY,
+                    relatedTarget: element
+                });
+                this.lastHoveredElement.dispatchEvent(outEvent);
+            }
         }
 
+        // Mouse enter new element
         if (element !== this.lastHoveredElement) {
-            // Mouse enter new element
             const enterEvent = new MouseEvent('mouseenter', {
                 bubbles: false,
                 cancelable: true,
                 clientX: this.cursorX,
-                clientY: this.cursorY
+                clientY: this.cursorY,
+                relatedTarget: this.lastHoveredElement
             });
             element.dispatchEvent(enterEvent);
-            
-            // Also dispatch mouseover for bubbling
+
             const overEvent = new MouseEvent('mouseover', {
                 bubbles: true,
                 cancelable: true,
@@ -337,13 +377,22 @@ class Display {
             element.dispatchEvent(overEvent);
         }
 
+        // Always dispatch mousemove
+        const moveEvent = new MouseEvent('mousemove', {
+            bubbles: true,
+            cancelable: true,
+            clientX: this.cursorX,
+            clientY: this.cursorY
+        });
+        element.dispatchEvent(moveEvent);
+
         this.lastHoveredElement = element;
     }
 
     checkCursorAttributes(element) {
         // Walk up the DOM to find cursor attributes
         let current = element;
-        let foundStick = false;
+        let foundStick = null;
         let foundText = null;
         let foundImg = null;
         let foundState = null;
@@ -351,51 +400,114 @@ class Display {
         while (current && current !== document.body) {
             // Check for stick
             if (current.hasAttribute('data-cursor-stick') && !foundStick) {
-                foundStick = true;
                 const stickTarget = current.getAttribute('data-cursor-stick');
-                const target = stickTarget ? document.querySelector(stickTarget) : current;
-                this.cursor.setStick(target);
+                foundStick = stickTarget ? document.querySelector(stickTarget) : current;
             }
 
             // Check for text
-            if (current.hasAttribute('data-cursor-text') && !foundText) {
+            if (current.hasAttribute('data-cursor-text') && foundText === null) {
                 foundText = current.getAttribute('data-cursor-text');
-                this.cursor.setText(foundText);
             }
 
             // Check for image
-            if (current.hasAttribute('data-cursor-img') && !foundImg) {
+            if (current.hasAttribute('data-cursor-img') && foundImg === null) {
                 foundImg = current.getAttribute('data-cursor-img');
-                this.cursor.setImg(foundImg);
             }
 
-            // Check for custom state (like -inverse)
-            if (current.hasAttribute('data-cursor') && !foundState) {
+            // Check for state
+            if (current.hasAttribute('data-cursor') && foundState === null) {
                 foundState = current.getAttribute('data-cursor');
-                this.cursor.addState(foundState);
             }
 
             current = current.parentElement;
         }
 
-        // Clear states if not found
-        if (!foundStick && this.wasSticking) {
-            this.cursor.removeStick();
-        }
-        if (!foundText && this.hadText) {
-            this.cursor.removeText();
-        }
-        if (!foundImg && this.hadImg) {
-            this.cursor.removeImg();
-        }
-        if (!foundState && this.hadState) {
-            this.cursor.removeState(this.hadState);
+        // Handle stick
+        if (foundStick !== this.currentStickTarget) {
+            if (foundStick) {
+                this.cursor.setStick(foundStick);
+            } else if (this.currentStickTarget) {
+                this.cursor.removeStick();
+            }
+            this.currentStickTarget = foundStick;
         }
 
-        this.wasSticking = foundStick;
-        this.hadText = !!foundText;
-        this.hadImg = !!foundImg;
-        this.hadState = foundState;
+        // Handle text
+        if (foundText !== this.currentTextTarget) {
+            if (foundText) {
+                this.cursor.setText(foundText);
+            } else if (this.currentTextTarget) {
+                this.cursor.removeText();
+            }
+            this.currentTextTarget = foundText;
+        }
+
+        // Handle image
+        if (foundImg !== this.currentImgTarget) {
+            if (foundImg) {
+                this.cursor.setImg(foundImg);
+            } else if (this.currentImgTarget) {
+                this.cursor.removeImg();
+            }
+            this.currentImgTarget = foundImg;
+        }
+
+        // Handle state
+        if (foundState !== this.currentStateTarget) {
+            if (this.currentStateTarget) {
+                this.cursor.removeState(this.currentStateTarget);
+            }
+            if (foundState) {
+                this.cursor.addState(foundState);
+            }
+            this.currentStateTarget = foundState;
+        }
+
+        // Auto-detect interactive elements for pointer state
+        const isInteractive = this.isElementInteractive(element);
+        if (isInteractive && !foundState) {
+            this.cursor.addState('-pointer');
+        } else if (!isInteractive && !foundState) {
+            this.cursor.removeState('-pointer');
+        }
+    }
+
+    isElementInteractive(element) {
+        if (!element) return false;
+        
+        // Check the element and its parents
+        let current = element;
+        while (current && current !== document.body) {
+            if (current.matches('a, button, [role="button"], input, select, textarea, [tabindex]:not([tabindex="-1"]), .demo-btn, .demo-link, .card, .image-item')) {
+                return true;
+            }
+            // Check for click handlers (approximate)
+            if (current.onclick || current.hasAttribute('data-cursor-stick')) {
+                return true;
+            }
+            current = current.parentElement;
+        }
+        return false;
+    }
+
+    clearAllStates() {
+        if (this.currentStickTarget) {
+            this.cursor.removeStick();
+            this.currentStickTarget = null;
+        }
+        if (this.currentTextTarget) {
+            this.cursor.removeText();
+            this.currentTextTarget = null;
+        }
+        if (this.currentImgTarget) {
+            this.cursor.removeImg();
+            this.currentImgTarget = null;
+        }
+        if (this.currentStateTarget) {
+            this.cursor.removeState(this.currentStateTarget);
+            this.currentStateTarget = null;
+        }
+        this.cursor.removeState('-pointer');
     }
 
     // ==================== UI Updates ====================
@@ -418,14 +530,6 @@ class Display {
             // Keep cursor in bounds
             this.cursorX = Math.min(this.cursorX, window.innerWidth);
             this.cursorY = Math.min(this.cursorY, window.innerHeight);
-        });
-
-        // Prevent default cursor on everything
-        document.addEventListener('mousemove', (e) => {
-            // Optional: sync with real mouse for testing
-            // this.cursorX = e.clientX;
-            // this.cursorY = e.clientY;
-            // this.moveCursor(this.cursorX, this.cursorY);
         });
     }
 }

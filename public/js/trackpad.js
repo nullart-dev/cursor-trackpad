@@ -18,11 +18,20 @@ class Trackpad {
         this.touchCount = 0;
         this.isScrolling = false;
         this.lastScrollY = 0;
+        this.lastScrollX = 0;
+
+        // Smooth scroll tracking
+        this.scrollSamples = [];
+        this.maxScrollSamples = 5;
 
         // WebSocket
         this.ws = null;
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 10;
+
+        // Throttling for performance
+        this.lastMoveTime = 0;
+        this.moveThrottle = 16; // ~60fps
 
         this.init();
     }
@@ -147,6 +156,8 @@ class Trackpad {
             // Two fingers - prepare for scroll
             this.isScrolling = true;
             this.lastScrollY = (touches[0].clientY + touches[1].clientY) / 2;
+            this.lastScrollX = (touches[0].clientX + touches[1].clientX) / 2;
+            this.scrollSamples = []; // Reset scroll samples
         }
     }
 
@@ -154,8 +165,15 @@ class Trackpad {
         e.preventDefault();
 
         const touches = e.touches;
+        const now = Date.now();
 
         if (touches.length === 1 && !this.isScrolling) {
+            // Throttle move events for performance
+            if (now - this.lastMoveTime < this.moveThrottle) {
+                return;
+            }
+            this.lastMoveTime = now;
+
             // Single finger move - cursor movement
             const touch = touches[0];
 
@@ -176,17 +194,57 @@ class Trackpad {
             this.updateTouchIndicator(touch.clientX, touch.clientY);
 
         } else if (touches.length === 2) {
-            // Two finger scroll
+            // Two finger scroll with smoothing
             const avgY = (touches[0].clientY + touches[1].clientY) / 2;
-            const deltaY = (avgY - this.lastScrollY) * this.sensitivity;
+            const avgX = (touches[0].clientX + touches[1].clientX) / 2;
+            
+            const rawDeltaY = (avgY - this.lastScrollY);
+            const rawDeltaX = (avgX - this.lastScrollX);
+            
             this.lastScrollY = avgY;
+            this.lastScrollX = avgX;
 
+            // Add to samples for smoothing
+            this.scrollSamples.push({ x: rawDeltaX, y: rawDeltaY, time: now });
+            
+            // Keep only recent samples
+            while (this.scrollSamples.length > this.maxScrollSamples) {
+                this.scrollSamples.shift();
+            }
+
+            // Calculate smoothed delta
+            const smoothed = this.getSmoothedScroll();
+
+            // Apply sensitivity and send
             this.send({
                 type: 'scroll',
-                deltaX: 0,
-                deltaY: -deltaY // Invert for natural scrolling
+                deltaX: smoothed.x * this.sensitivity * 0.5,
+                deltaY: -smoothed.y * this.sensitivity * 0.5 // Invert for natural scrolling
             });
         }
+    }
+
+    getSmoothedScroll() {
+        if (this.scrollSamples.length === 0) {
+            return { x: 0, y: 0 };
+        }
+
+        // Weighted average - more recent samples have higher weight
+        let totalX = 0;
+        let totalY = 0;
+        let totalWeight = 0;
+
+        this.scrollSamples.forEach((sample, index) => {
+            const weight = index + 1; // Later samples get higher weight
+            totalX += sample.x * weight;
+            totalY += sample.y * weight;
+            totalWeight += weight;
+        });
+
+        return {
+            x: totalX / totalWeight,
+            y: totalY / totalWeight
+        };
     }
 
     handleTouchEnd(e) {
@@ -222,6 +280,7 @@ class Trackpad {
             this.trackpad.classList.remove('touching');
             this.touchCount = 0;
             this.isScrolling = false;
+            this.scrollSamples = [];
         }
     }
 
