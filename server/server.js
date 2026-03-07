@@ -18,7 +18,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// Serve static files from public directory
+// Serve static files from public directory (adjusted path for root package.json)
 app.use(express.static(path.join(__dirname, '../public')));
 
 // Health check endpoint for DigitalOcean
