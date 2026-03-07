@@ -11,8 +11,14 @@ class Display {
         this.cursorY = window.innerHeight / 2;
         this.isConnected = false;
 
-        // Mouse follower instance
-        this.cursor = null;
+        // Cursor elements (we'll create our own)
+        this.cursorOuter = null;
+        this.cursorInner = null;
+        this.cursorText = null;
+
+        // Animation state
+        this.currentX = this.cursorX;
+        this.currentY = this.cursorY;
 
         // WebSocket
         this.ws = null;
@@ -22,42 +28,134 @@ class Display {
     }
 
     init() {
-        this.initMouseFollower();
+        this.createCursor();
         this.connectWebSocket();
         this.bindEvents();
+        this.startRenderLoop();
     }
 
-    // ==================== Mouse Follower Setup ====================
+    // ==================== Custom Cursor Setup ====================
 
-    initMouseFollower() {
-        // Register GSAP with MouseFollower
-        MouseFollower.registerGSAP(gsap);
+    createCursor() {
+        // Create cursor container
+        const cursor = document.createElement('div');
+        cursor.className = 'custom-cursor';
+        cursor.innerHTML = `
+            <div class="cursor-outer"></div>
+            <div class="cursor-inner"></div>
+            <div class="cursor-text"></div>
+        `;
+        document.body.appendChild(cursor);
 
-        // Create cursor instance
-        this.cursor = new MouseFollower({
-            speed: 0.55,
-            ease: 'expo.out',
-            skewing: 2,
-            skewingText: 2,
-            skewingIcon: 2,
-            skewingMedia: 2,
-            skewingDelta: 0.001,
-            skewingDeltaMax: 0.15,
-            stickDelta: 0.15,
-            showTimeout: 0,
-            hideOnLeave: false,
-            stateDetection: {
-                '-pointer': 'a, button, .demo-btn, .demo-link, .card, .image-item',
+        this.cursorEl = cursor;
+        this.cursorOuter = cursor.querySelector('.cursor-outer');
+        this.cursorInner = cursor.querySelector('.cursor-inner');
+        this.cursorText = cursor.querySelector('.cursor-text');
+
+        // Add styles
+        const style = document.createElement('style');
+        style.textContent = `
+            .custom-cursor {
+                position: fixed;
+                top: 0;
+                left: 0;
+                pointer-events: none;
+                z-index: 99999;
+                will-change: transform;
             }
-        });
+            .cursor-outer {
+                position: absolute;
+                width: 40px;
+                height: 40px;
+                border: 1px solid rgba(255, 255, 255, 0.5);
+                border-radius: 50%;
+                transform: translate(-50%, -50%);
+                transition: width 0.3s, height 0.3s, background 0.3s;
+            }
+            .cursor-inner {
+                position: absolute;
+                width: 8px;
+                height: 8px;
+                background: #fff;
+                border-radius: 50%;
+                transform: translate(-50%, -50%);
+                transition: transform 0.1s;
+            }
+            .cursor-text {
+                position: absolute;
+                transform: translate(-50%, -50%);
+                color: #fff;
+                font-size: 12px;
+                font-weight: 500;
+                white-space: nowrap;
+                opacity: 0;
+                transition: opacity 0.2s;
+            }
+            .custom-cursor.pointer .cursor-outer {
+                width: 50px;
+                height: 50px;
+                background: rgba(255, 255, 255, 0.1);
+            }
+            .custom-cursor.clicking .cursor-inner {
+                transform: translate(-50%, -50%) scale(0.5);
+            }
+            .custom-cursor.clicking .cursor-outer {
+                transform: translate(-50%, -50%) scale(0.8);
+            }
+            .custom-cursor.has-text .cursor-outer {
+                width: 80px;
+                height: 80px;
+                background: rgba(74, 158, 255, 0.9);
+                border-color: transparent;
+            }
+            .custom-cursor.has-text .cursor-inner {
+                opacity: 0;
+            }
+            .custom-cursor.has-text .cursor-text {
+                opacity: 1;
+            }
+            .custom-cursor.magnetic .cursor-outer {
+                width: 60px;
+                height: 60px;
+                background: rgba(74, 158, 255, 0.2);
+            }
+        `;
+        document.head.appendChild(style);
 
         // Set initial position
-        this.moveCursor(this.cursorX, this.cursorY);
+        this.updateCursorPosition();
+    }
 
-        // Listen to cursor events
-        this.cursor.on('render', () => {
+    startRenderLoop() {
+        const render = () => {
+            // Smooth interpolation (easing)
+            const ease = 0.15;
+            this.currentX += (this.cursorX - this.currentX) * ease;
+            this.currentY += (this.cursorY - this.currentY) * ease;
+
+            // Apply position
+            this.cursorEl.style.transform = `translate3d(${this.currentX}px, ${this.currentY}px, 0)`;
+
+            // Calculate velocity for skewing
+            const velocityX = this.cursorX - this.currentX;
+            const velocityY = this.cursorY - this.currentY;
+            const speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
+            const angle = Math.atan2(velocityY, velocityX) * (180 / Math.PI);
+
+            // Apply skew based on velocity
+            const skewAmount = Math.min(speed * 0.5, 20);
+            this.cursorOuter.style.transform = `translate(-50%, -50%) rotate(${angle}deg) scaleX(${1 + skewAmount * 0.02}) scaleY(${1 - skewAmount * 0.01})`;
+
+            // Update position display
             this.updatePositionDisplay();
-        });
+
+            requestAnimationFrame(render);
+        };
+        requestAnimationFrame(render);
+    }
+
+    updateCursorPosition() {
+        this.cursorEl.style.transform = `translate3d(${this.cursorX}px, ${this.cursorY}px, 0)`;
     }
 
     // ==================== WebSocket ====================
@@ -66,6 +164,7 @@ class Display {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}`;
 
+        console.log('Connecting to WebSocket:', wsUrl);
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
@@ -81,6 +180,7 @@ class Display {
 
         this.ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
+            console.log('Received:', data);
             this.handleMessage(data);
         };
 
@@ -135,7 +235,7 @@ class Display {
         }
 
         // Update connection status when receiving trackpad data
-        if (data.type === 'move' || data.type === 'click') {
+        if (data.type === 'move' || data.type === 'click' || data.type === 'scroll') {
             this.updateStatus(true, 'Trackpad connected');
         }
     }
@@ -145,35 +245,36 @@ class Display {
         this.cursorX = Math.max(0, Math.min(window.innerWidth, this.cursorX + deltaX));
         this.cursorY = Math.max(0, Math.min(window.innerHeight, this.cursorY + deltaY));
 
-        this.moveCursor(this.cursorX, this.cursorY);
         this.checkHoverState();
     }
 
     handleClick(button = 'left') {
         // Visual feedback
-        this.cursor.addState('-active');
-        setTimeout(() => this.cursor.removeState('-active'), 150);
+        this.cursorEl.classList.add('clicking');
+        setTimeout(() => this.cursorEl.classList.remove('clicking'), 150);
 
         // Find element under cursor
         const element = document.elementFromPoint(this.cursorX, this.cursorY);
         
         if (element) {
+            console.log('Clicking on:', element);
+            
             if (button === 'left') {
                 // Simulate click
                 const clickEvent = new MouseEvent('click', {
                     bubbles: true,
                     cancelable: true,
                     clientX: this.cursorX,
-                    clientY: this.cursorY
+                    clientY: this.cursorY,
+                    view: window
                 });
                 element.dispatchEvent(clickEvent);
 
                 // Also trigger focus for interactive elements
-                if (element.matches('button, a, input, select, textarea')) {
+                if (element.matches('button, a, input, select, textarea, [tabindex]')) {
                     element.focus();
                 }
             } else if (button === 'right') {
-                // Simulate context menu (optional)
                 const contextEvent = new MouseEvent('contextmenu', {
                     bubbles: true,
                     cancelable: true,
@@ -245,24 +346,6 @@ class Display {
         return null;
     }
 
-    // ==================== Cursor Movement ====================
-
-    moveCursor(x, y) {
-        // Get the cursor element
-        const cursorEl = document.querySelector('.mf-cursor');
-        
-        if (cursorEl) {
-            // Use GSAP for smooth animation
-            gsap.to(cursorEl, {
-                x: x,
-                y: y,
-                duration: 0.55,
-                ease: 'expo.out',
-                overwrite: true
-            });
-        }
-    }
-
     // ==================== Hover State Detection ====================
 
     checkHoverState() {
@@ -270,17 +353,48 @@ class Display {
         
         if (!element) return;
 
-        // Trigger mouseenter/mouseleave for state detection
-        this.simulateHover(element);
+        // Check for interactive elements
+        const isInteractive = element.matches('a, button, .demo-btn, .demo-link, .card, .image-item, [data-cursor-stick], [data-cursor-text]');
+        
+        if (isInteractive) {
+            this.cursorEl.classList.add('pointer');
+        } else {
+            this.cursorEl.classList.remove('pointer');
+        }
 
-        // Check for data attributes
-        this.checkCursorAttributes(element);
+        // Check for cursor text
+        const textEl = element.closest('[data-cursor-text]');
+        if (textEl) {
+            const text = textEl.getAttribute('data-cursor-text');
+            this.cursorText.textContent = text;
+            this.cursorEl.classList.add('has-text');
+        } else {
+            this.cursorEl.classList.remove('has-text');
+        }
+
+        // Check for magnetic/sticky
+        const stickyEl = element.closest('[data-cursor-stick]');
+        if (stickyEl) {
+            this.cursorEl.classList.add('magnetic');
+            
+            // Pull cursor toward element center
+            const rect = stickyEl.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            // Magnetic effect - gently pull toward center
+            this.cursorX += (centerX - this.cursorX) * 0.1;
+            this.cursorY += (centerY - this.cursorY) * 0.1;
+        } else {
+            this.cursorEl.classList.remove('magnetic');
+        }
+
+        // Trigger mouseenter/mouseleave
+        this.simulateHover(element);
     }
 
     simulateHover(element) {
-        // Store last hovered element
         if (this.lastHoveredElement && this.lastHoveredElement !== element) {
-            // Mouse leave old element
             const leaveEvent = new MouseEvent('mouseleave', {
                 bubbles: true,
                 cancelable: true,
@@ -291,7 +405,6 @@ class Display {
         }
 
         if (element !== this.lastHoveredElement) {
-            // Mouse enter new element
             const enterEvent = new MouseEvent('mouseenter', {
                 bubbles: true,
                 cancelable: true,
@@ -302,53 +415,6 @@ class Display {
         }
 
         this.lastHoveredElement = element;
-    }
-
-    checkCursorAttributes(element) {
-        // Walk up the DOM to find cursor attributes
-        let current = element;
-        let foundStick = false;
-        let foundText = null;
-        let foundImg = null;
-
-        while (current && current !== document.body) {
-            // Check for stick
-            if (current.hasAttribute('data-cursor-stick') && !foundStick) {
-                foundStick = true;
-                const stickTarget = current.getAttribute('data-cursor-stick');
-                const target = stickTarget ? document.querySelector(stickTarget) : current;
-                this.cursor.setStick(target);
-            }
-
-            // Check for text
-            if (current.hasAttribute('data-cursor-text') && !foundText) {
-                foundText = current.getAttribute('data-cursor-text');
-                this.cursor.setText(foundText);
-            }
-
-            // Check for image
-            if (current.hasAttribute('data-cursor-img') && !foundImg) {
-                foundImg = current.getAttribute('data-cursor-img');
-                this.cursor.setImg(foundImg);
-            }
-
-            current = current.parentElement;
-        }
-
-        // Clear states if not found
-        if (!foundStick && this.wasSticking) {
-            this.cursor.removeStick();
-        }
-        if (!foundText && this.hadText) {
-            this.cursor.removeText();
-        }
-        if (!foundImg && this.hadImg) {
-            this.cursor.removeImg();
-        }
-
-        this.wasSticking = foundStick;
-        this.hadText = !!foundText;
-        this.hadImg = !!foundImg;
     }
 
     // ==================== UI Updates ====================
@@ -368,35 +434,13 @@ class Display {
     bindEvents() {
         // Handle window resize
         window.addEventListener('resize', () => {
-            // Keep cursor in bounds
             this.cursorX = Math.min(this.cursorX, window.innerWidth);
             this.cursorY = Math.min(this.cursorY, window.innerHeight);
-        });
-
-        // Prevent default cursor on everything
-        document.addEventListener('mousemove', (e) => {
-            // Optional: sync with real mouse for testing
-            // this.cursorX = e.clientX;
-            // this.cursorY = e.clientY;
-            // this.moveCursor(this.cursorX, this.cursorY);
         });
     }
 }
 
-// Initialize when window fully loads (ensures all scripts are ready)
-window.addEventListener('load', () => {
-    // Check if libraries are available
-    if (typeof MouseFollower === 'undefined') {
-        console.error('MouseFollower library not loaded!');
-        document.body.innerHTML = '<div style="color:red;padding:20px;">Error: MouseFollower library failed to load. Please refresh.</div>';
-        return;
-    }
-    if (typeof gsap === 'undefined') {
-        console.error('GSAP library not loaded!');
-        document.body.innerHTML = '<div style="color:red;padding:20px;">Error: GSAP library failed to load. Please refresh.</div>';
-        return;
-    }
-    
-    console.log('All libraries loaded, initializing Display...');
-    new Display();
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    window.display = new Display();
 });
