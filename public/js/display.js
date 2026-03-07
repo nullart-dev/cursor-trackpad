@@ -13,10 +13,17 @@ class Display {
 
         // Mouse follower instance
         this.cursor = null;
+        this.cursorEl = null;
 
         // WebSocket
         this.ws = null;
         this.reconnectAttempts = 0;
+
+        // Hover tracking
+        this.lastHoveredElement = null;
+        this.wasSticking = false;
+        this.hadText = false;
+        this.hadImg = false;
 
         this.init();
     }
@@ -51,8 +58,13 @@ class Display {
             }
         });
 
-        // Set initial position
-        this.moveCursor(this.cursorX, this.cursorY);
+        // Get cursor element reference
+        this.cursorEl = document.querySelector('.mf-cursor');
+
+        // Set initial position immediately (no animation)
+        if (this.cursorEl) {
+            gsap.set(this.cursorEl, { x: this.cursorX, y: this.cursorY });
+        }
 
         // Listen to cursor events
         this.cursor.on('render', () => {
@@ -248,17 +260,21 @@ class Display {
     // ==================== Cursor Movement ====================
 
     moveCursor(x, y) {
-        // Get the cursor element
-        const cursorEl = document.querySelector('.mf-cursor');
+        if (!this.cursorEl) {
+            this.cursorEl = document.querySelector('.mf-cursor');
+        }
         
-        if (cursorEl) {
-            // Use GSAP for smooth animation
-            gsap.to(cursorEl, {
+        if (this.cursorEl) {
+            // Kill any existing animations to prevent conflicts
+            gsap.killTweensOf(this.cursorEl);
+            
+            // Animate to new position from CURRENT position (not from 0,0)
+            gsap.to(this.cursorEl, {
                 x: x,
                 y: y,
-                duration: 0.55,
-                ease: 'expo.out',
-                overwrite: true
+                duration: 0.15,  // Shorter duration for more responsive feel
+                ease: 'power2.out',
+                overwrite: 'auto'  // Automatically handle conflicting tweens
             });
         }
     }
@@ -282,23 +298,43 @@ class Display {
         if (this.lastHoveredElement && this.lastHoveredElement !== element) {
             // Mouse leave old element
             const leaveEvent = new MouseEvent('mouseleave', {
-                bubbles: true,
+                bubbles: false,
                 cancelable: true,
                 clientX: this.cursorX,
                 clientY: this.cursorY
             });
             this.lastHoveredElement.dispatchEvent(leaveEvent);
+            
+            // Also dispatch mouseout for bubbling
+            const outEvent = new MouseEvent('mouseout', {
+                bubbles: true,
+                cancelable: true,
+                clientX: this.cursorX,
+                clientY: this.cursorY,
+                relatedTarget: element
+            });
+            this.lastHoveredElement.dispatchEvent(outEvent);
         }
 
         if (element !== this.lastHoveredElement) {
             // Mouse enter new element
             const enterEvent = new MouseEvent('mouseenter', {
-                bubbles: true,
+                bubbles: false,
                 cancelable: true,
                 clientX: this.cursorX,
                 clientY: this.cursorY
             });
             element.dispatchEvent(enterEvent);
+            
+            // Also dispatch mouseover for bubbling
+            const overEvent = new MouseEvent('mouseover', {
+                bubbles: true,
+                cancelable: true,
+                clientX: this.cursorX,
+                clientY: this.cursorY,
+                relatedTarget: this.lastHoveredElement
+            });
+            element.dispatchEvent(overEvent);
         }
 
         this.lastHoveredElement = element;
@@ -310,6 +346,7 @@ class Display {
         let foundStick = false;
         let foundText = null;
         let foundImg = null;
+        let foundState = null;
 
         while (current && current !== document.body) {
             // Check for stick
@@ -332,6 +369,12 @@ class Display {
                 this.cursor.setImg(foundImg);
             }
 
+            // Check for custom state (like -inverse)
+            if (current.hasAttribute('data-cursor') && !foundState) {
+                foundState = current.getAttribute('data-cursor');
+                this.cursor.addState(foundState);
+            }
+
             current = current.parentElement;
         }
 
@@ -345,10 +388,14 @@ class Display {
         if (!foundImg && this.hadImg) {
             this.cursor.removeImg();
         }
+        if (!foundState && this.hadState) {
+            this.cursor.removeState(this.hadState);
+        }
 
         this.wasSticking = foundStick;
         this.hadText = !!foundText;
         this.hadImg = !!foundImg;
+        this.hadState = foundState;
     }
 
     // ==================== UI Updates ====================
