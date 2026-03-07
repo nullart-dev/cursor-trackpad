@@ -18,6 +18,13 @@ class Trackpad {
         this.touchCount = 0;
         this.isScrolling = false;
         this.lastScrollY = 0;
+        this.lastScrollX = 0;
+
+        // Scroll smoothing
+        this.scrollAccumX = 0;
+        this.scrollAccumY = 0;
+        this.lastScrollTime = 0;
+        this.scrollThrottleMs = 16; // ~60fps
 
         // WebSocket
         this.ws = null;
@@ -146,7 +153,11 @@ class Trackpad {
         } else if (touches.length === 2) {
             // Two fingers - prepare for scroll
             this.isScrolling = true;
+            this.lastScrollX = (touches[0].clientX + touches[1].clientX) / 2;
             this.lastScrollY = (touches[0].clientY + touches[1].clientY) / 2;
+            this.scrollAccumX = 0;
+            this.scrollAccumY = 0;
+            this.lastScrollTime = Date.now();
         }
     }
 
@@ -176,16 +187,33 @@ class Trackpad {
             this.updateTouchIndicator(touch.clientX, touch.clientY);
 
         } else if (touches.length === 2) {
-            // Two finger scroll
+            // Two finger scroll - Apple-like smooth scrolling
+            const avgX = (touches[0].clientX + touches[1].clientX) / 2;
             const avgY = (touches[0].clientY + touches[1].clientY) / 2;
-            const deltaY = (avgY - this.lastScrollY) * this.sensitivity;
+
+            const deltaX = (avgX - this.lastScrollX) * this.sensitivity * 0.5;
+            const deltaY = (avgY - this.lastScrollY) * this.sensitivity * 0.5;
+
+            this.lastScrollX = avgX;
             this.lastScrollY = avgY;
 
-            this.send({
-                type: 'scroll',
-                deltaX: 0,
-                deltaY: -deltaY // Invert for natural scrolling
-            });
+            // Accumulate scroll deltas
+            this.scrollAccumX += deltaX;
+            this.scrollAccumY += deltaY;
+
+            // Throttle sends for smoother feel
+            const now = Date.now();
+            if (now - this.lastScrollTime >= this.scrollThrottleMs) {
+                this.send({
+                    type: 'scroll',
+                    deltaX: 0,
+                    deltaY: -this.scrollAccumY // Invert for natural scrolling
+                });
+
+                this.scrollAccumX = 0;
+                this.scrollAccumY = 0;
+                this.lastScrollTime = now;
+            }
         }
     }
 
@@ -194,6 +222,21 @@ class Trackpad {
 
         const touchDuration = Date.now() - this.touchStartTime;
         const timeSinceLastTap = Date.now() - this.lastTouchEnd;
+
+        // Send scroll end for momentum
+        if (this.isScrolling && this.touchCount === 2) {
+            // Send any remaining accumulated scroll
+            if (Math.abs(this.scrollAccumX) > 0.1 || Math.abs(this.scrollAccumY) > 0.1) {
+                this.send({
+                    type: 'scroll',
+                    deltaX: 0,
+                    deltaY: -this.scrollAccumY
+                });
+            }
+            
+            // Signal scroll ended (display will continue momentum)
+            this.send({ type: 'scrollEnd' });
+        }
 
         // Detect taps
         if (touchDuration < 200) {
@@ -222,6 +265,8 @@ class Trackpad {
             this.trackpad.classList.remove('touching');
             this.touchCount = 0;
             this.isScrolling = false;
+            this.scrollAccumX = 0;
+            this.scrollAccumY = 0;
         }
     }
 
