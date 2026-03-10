@@ -351,15 +351,24 @@ class Display {
 
     // ==================== Hover State Detection ====================
 
+    // Selector for elements that should receive .is-hovered
+    static HOVERABLE_SELECTOR = 'a, button, .demo-btn, .demo-link, .card, .image-item, [data-cursor-stick], [data-cursor-text], [data-cursor]';
+
     checkHoverState() {
         const element = document.elementFromPoint(this.cursorX, this.cursorY);
         
-        if (!element) return;
+        if (!element) {
+            this.cursorEl.classList.remove('pointer');
+            this.cursorEl.classList.remove('has-text');
+            this.cursorEl.classList.remove('magnetic');
+            this.simulateHover(null);
+            return;
+        }
 
-        // Check for interactive elements
-        const isInteractive = element.matches('a, button, .demo-btn, .demo-link, .card, .image-item, [data-cursor-stick], [data-cursor-text]');
+        // Check for interactive elements (use closest so children of cards etc. still match)
+        const interactive = element.closest(Display.HOVERABLE_SELECTOR);
         
-        if (isInteractive) {
+        if (interactive) {
             this.cursorEl.classList.add('pointer');
         } else {
             this.cursorEl.classList.remove('pointer');
@@ -392,8 +401,9 @@ class Display {
             this.cursorEl.classList.remove('magnetic');
         }
 
-        // Trigger mouseenter/mouseleave
-        this.simulateHover(element);
+        // Trigger hover — pass the resolved hoverable target (not the raw leaf element)
+        // so that moving between <h3> and <p> inside the same .card doesn't cause flicker
+        this.simulateHover(interactive || element);
     }
 
     simulateHover(element) {
@@ -401,16 +411,47 @@ class Display {
 
         if (prev === element) return;
 
-        // --- Leave the previous element and its ancestors ---
-        if (prev) {
-            // Remove .is-hovered from prev and all its ancestors
-            let el = prev;
+        // --- Collect all hoverable ancestors for old and new elements ---
+        const getHoverTargets = (el) => {
+            const targets = new Set();
             while (el && el !== document.documentElement) {
-                el.classList.remove('is-hovered');
+                targets.add(el);
+                // Also find any hoverable ancestors above this element
+                const parent = el.parentElement;
+                if (parent) {
+                    const hoverableParent = parent.closest(Display.HOVERABLE_SELECTOR);
+                    if (hoverableParent) {
+                        let p = el;
+                        while (p && p !== document.documentElement) {
+                            targets.add(p);
+                            p = p.parentElement;
+                        }
+                        break;
+                    }
+                }
                 el = el.parentElement;
             }
+            return targets;
+        };
 
-            // mouseout bubbles (useful for delegated listeners)
+        const prevTargets = prev ? getHoverTargets(prev) : new Set();
+        const newTargets = element ? getHoverTargets(element) : new Set();
+
+        // Remove .is-hovered from elements no longer hovered
+        for (const el of prevTargets) {
+            if (!newTargets.has(el)) {
+                el.classList.remove('is-hovered');
+            }
+        }
+
+        // Add .is-hovered to newly hovered elements
+        for (const el of newTargets) {
+            el.classList.add('is-hovered');
+        }
+
+        // --- Dispatch mouse events ---
+        if (prev) {
+            // mouseout bubbles
             prev.dispatchEvent(new MouseEvent('mouseout', {
                 bubbles: true,
                 cancelable: true,
@@ -420,8 +461,7 @@ class Display {
                 view: window
             }));
 
-            // mouseleave does NOT bubble — fire on prev and each ancestor
-            // that the new element is NOT inside of
+            // mouseleave doesn't bubble — fire up the tree until shared ancestor
             let leaveTarget = prev;
             while (leaveTarget && leaveTarget !== document.documentElement) {
                 if (element && leaveTarget.contains(element)) break;
@@ -437,15 +477,7 @@ class Display {
             }
         }
 
-        // --- Enter the new element and its ancestors ---
         if (element) {
-            // Add .is-hovered to element and all ancestors
-            let el = element;
-            while (el && el !== document.documentElement) {
-                el.classList.add('is-hovered');
-                el = el.parentElement;
-            }
-
             // mouseover bubbles
             element.dispatchEvent(new MouseEvent('mouseover', {
                 bubbles: true,
@@ -456,8 +488,7 @@ class Display {
                 view: window
             }));
 
-            // mouseenter does NOT bubble — fire on element and each ancestor
-            // that the previous element was NOT inside of
+            // mouseenter doesn't bubble — fire up the tree until shared ancestor
             let enterTarget = element;
             while (enterTarget && enterTarget !== document.documentElement) {
                 if (prev && enterTarget.contains(prev)) break;
