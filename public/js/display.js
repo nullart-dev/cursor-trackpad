@@ -319,6 +319,9 @@ class Display {
                 behavior: 'auto'
             });
         }
+
+        // Content moved under cursor — re-check what we're hovering
+        this.checkHoverState();
     }
 
     findScrollableParent(element) {
@@ -348,15 +351,24 @@ class Display {
 
     // ==================== Hover State Detection ====================
 
+    // Selector for elements that should receive .is-hovered
+    static HOVERABLE_SELECTOR = 'a, button, .demo-btn, .demo-link, .card, .image-item, [data-cursor-stick], [data-cursor-text], [data-cursor]';
+
     checkHoverState() {
         const element = document.elementFromPoint(this.cursorX, this.cursorY);
         
-        if (!element) return;
+        if (!element) {
+            this.cursorEl.classList.remove('pointer');
+            this.cursorEl.classList.remove('has-text');
+            this.cursorEl.classList.remove('magnetic');
+            this.simulateHover(null);
+            return;
+        }
 
-        // Check for interactive elements
-        const isInteractive = element.matches('a, button, .demo-btn, .demo-link, .card, .image-item, [data-cursor-stick], [data-cursor-text]');
+        // Check for interactive elements (use closest so children of cards etc. still match)
+        const interactive = element.closest(Display.HOVERABLE_SELECTOR);
         
-        if (isInteractive) {
+        if (interactive) {
             this.cursorEl.classList.add('pointer');
         } else {
             this.cursorEl.classList.remove('pointer');
@@ -389,29 +401,107 @@ class Display {
             this.cursorEl.classList.remove('magnetic');
         }
 
-        // Trigger mouseenter/mouseleave
-        this.simulateHover(element);
+        // Trigger hover — pass the resolved hoverable target (not the raw leaf element)
+        // so that moving between <h3> and <p> inside the same .card doesn't cause flicker
+        this.simulateHover(interactive || element);
     }
 
     simulateHover(element) {
-        if (this.lastHoveredElement && this.lastHoveredElement !== element) {
-            const leaveEvent = new MouseEvent('mouseleave', {
-                bubbles: true,
-                cancelable: true,
-                clientX: this.cursorX,
-                clientY: this.cursorY
-            });
-            this.lastHoveredElement.dispatchEvent(leaveEvent);
+        const prev = this.lastHoveredElement;
+
+        if (prev === element) return;
+
+        // --- Collect all hoverable ancestors for old and new elements ---
+        const getHoverTargets = (el) => {
+            const targets = new Set();
+            while (el && el !== document.documentElement) {
+                targets.add(el);
+                // Also find any hoverable ancestors above this element
+                const parent = el.parentElement;
+                if (parent) {
+                    const hoverableParent = parent.closest(Display.HOVERABLE_SELECTOR);
+                    if (hoverableParent) {
+                        let p = el;
+                        while (p && p !== document.documentElement) {
+                            targets.add(p);
+                            p = p.parentElement;
+                        }
+                        break;
+                    }
+                }
+                el = el.parentElement;
+            }
+            return targets;
+        };
+
+        const prevTargets = prev ? getHoverTargets(prev) : new Set();
+        const newTargets = element ? getHoverTargets(element) : new Set();
+
+        // Remove .is-hovered from elements no longer hovered
+        for (const el of prevTargets) {
+            if (!newTargets.has(el)) {
+                el.classList.remove('is-hovered');
+            }
         }
 
-        if (element !== this.lastHoveredElement) {
-            const enterEvent = new MouseEvent('mouseenter', {
+        // Add .is-hovered to newly hovered elements
+        for (const el of newTargets) {
+            el.classList.add('is-hovered');
+        }
+
+        // --- Dispatch mouse events ---
+        if (prev) {
+            // mouseout bubbles
+            prev.dispatchEvent(new MouseEvent('mouseout', {
                 bubbles: true,
                 cancelable: true,
                 clientX: this.cursorX,
-                clientY: this.cursorY
-            });
-            element.dispatchEvent(enterEvent);
+                clientY: this.cursorY,
+                relatedTarget: element,
+                view: window
+            }));
+
+            // mouseleave doesn't bubble — fire up the tree until shared ancestor
+            let leaveTarget = prev;
+            while (leaveTarget && leaveTarget !== document.documentElement) {
+                if (element && leaveTarget.contains(element)) break;
+                leaveTarget.dispatchEvent(new MouseEvent('mouseleave', {
+                    bubbles: false,
+                    cancelable: false,
+                    clientX: this.cursorX,
+                    clientY: this.cursorY,
+                    relatedTarget: element,
+                    view: window
+                }));
+                leaveTarget = leaveTarget.parentElement;
+            }
+        }
+
+        if (element) {
+            // mouseover bubbles
+            element.dispatchEvent(new MouseEvent('mouseover', {
+                bubbles: true,
+                cancelable: true,
+                clientX: this.cursorX,
+                clientY: this.cursorY,
+                relatedTarget: prev,
+                view: window
+            }));
+
+            // mouseenter doesn't bubble — fire up the tree until shared ancestor
+            let enterTarget = element;
+            while (enterTarget && enterTarget !== document.documentElement) {
+                if (prev && enterTarget.contains(prev)) break;
+                enterTarget.dispatchEvent(new MouseEvent('mouseenter', {
+                    bubbles: false,
+                    cancelable: false,
+                    clientX: this.cursorX,
+                    clientY: this.cursorY,
+                    relatedTarget: prev,
+                    view: window
+                }));
+                enterTarget = enterTarget.parentElement;
+            }
         }
 
         this.lastHoveredElement = element;
