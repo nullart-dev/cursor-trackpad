@@ -260,6 +260,199 @@ header p {
     background: rgba(255, 255, 255, 0.3);
 }
 
+/* Section descriptions */
+.section-desc {
+    font-size: 15px;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: -16px;
+    margin-bottom: 24px;
+}
+
+/* ==================== Image Gallery ==================== */
+
+.image-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+}
+
+.image-item {
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: transform 0.4s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.4s;
+}
+
+.image-item:hover,
+.image-item.is-hovered {
+    transform: scale(1.03);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.image-item-inner {
+    aspect-ratio: 1;
+    overflow: hidden;
+}
+
+.image-item-inner img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.6s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.image-item:hover .image-item-inner img,
+.image-item.is-hovered .image-item-inner img {
+    transform: scale(1.08);
+}
+
+.image-label {
+    display: block;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+    text-align: center;
+}
+
+/* ==================== Video Previews ==================== */
+
+.video-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+}
+
+.video-item {
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #111;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: transform 0.4s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.4s;
+}
+
+.video-item:hover,
+.video-item.is-hovered {
+    transform: scale(1.03);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.video-item video {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    display: block;
+}
+
+.video-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.3);
+    transition: opacity 0.3s, background 0.3s;
+}
+
+.video-item:hover .video-overlay,
+.video-item.is-hovered .video-overlay {
+    opacity: 0;
+}
+
+.play-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.9);
+    color: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    padding-left: 3px;
+    transition: transform 0.3s;
+}
+
+.video-item:hover .play-icon,
+.video-item.is-hovered .play-icon {
+    transform: scale(0.8);
+    opacity: 0;
+}
+
+.video-label {
+    display: block;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* ==================== Mixed Interaction Cards ==================== */
+
+.card-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+}
+
+.card-gradient {
+    background: linear-gradient(135deg, rgba(74, 158, 255, 0.15), rgba(139, 92, 246, 0.15));
+    border-color: rgba(74, 158, 255, 0.2);
+}
+
+.card-gradient:hover,
+.card-gradient.is-hovered {
+    background: linear-gradient(135deg, rgba(74, 158, 255, 0.25), rgba(139, 92, 246, 0.25));
+    border-color: rgba(74, 158, 255, 0.4);
+}
+
+.card-glow {
+    transition: transform 0.3s, background 0.3s, box-shadow 0.4s;
+}
+
+.card-glow:hover,
+.card-glow.is-hovered {
+    box-shadow: 0 0 40px rgba(255, 200, 50, 0.15), 0 0 80px rgba(255, 200, 50, 0.05);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.card-outline-animated {
+    position: relative;
+    background: rgba(255, 255, 255, 0.03);
+    border: none;
+    overflow: hidden;
+}
+
+.card-outline-animated::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    padding: 1px;
+    background: conic-gradient(from var(--border-angle, 0deg), 
+        transparent 25%, 
+        rgba(74, 158, 255, 0.5) 50%, 
+        transparent 75%);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: borderRotate 4s linear infinite;
+}
+
+@keyframes borderRotate {
+    to {
+        --border-angle: 360deg;
+    }
+}
+
+/* Register the custom property for animation */
+@property --border-angle {
+    syntax: "<angle>";
+    initial-value: 0deg;
+    inherits: false;
+}
+
 /* ==================== Mouse Follower Customizations ==================== */
 
 .mf-cursor {
@@ -325,7 +518,15 @@ header p {
         font-size: 32px;
     }
     
-    .image-grid {
+    .image-grid,
+    .video-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .image-grid,
+    .video-grid {
+        grid-template-columns: 1fr;
     }
 }

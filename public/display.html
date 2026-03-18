@@ -87,6 +87,120 @@
                 </div>
             </div>
         </section>
+
+        <!-- Image Gallery with cursor preview -->
+        <section class="demo-section">
+            <h2>Image Gallery</h2>
+            <p class="section-desc">Hover to see a preview thumbnail follow the cursor</p>
+
+            <div class="image-grid">
+                <div class="image-item" data-cursor-img="https://picsum.photos/id/10/200/200">
+                    <div class="image-item-inner">
+                        <img src="https://picsum.photos/id/10/400/400" alt="Forest" loading="lazy">
+                    </div>
+                    <span class="image-label">Forest</span>
+                </div>
+
+                <div class="image-item" data-cursor-img="https://picsum.photos/id/29/200/200">
+                    <div class="image-item-inner">
+                        <img src="https://picsum.photos/id/29/400/400" alt="Mountains" loading="lazy">
+                    </div>
+                    <span class="image-label">Mountains</span>
+                </div>
+
+                <div class="image-item" data-cursor-img="https://picsum.photos/id/37/200/200">
+                    <div class="image-item-inner">
+                        <img src="https://picsum.photos/id/37/400/400" alt="Coastline" loading="lazy">
+                    </div>
+                    <span class="image-label">Coastline</span>
+                </div>
+
+                <div class="image-item" data-cursor-img="https://picsum.photos/id/65/200/200">
+                    <div class="image-item-inner">
+                        <img src="https://picsum.photos/id/65/400/400" alt="Desert" loading="lazy">
+                    </div>
+                    <span class="image-label">Desert</span>
+                </div>
+
+                <div class="image-item" data-cursor-img="https://picsum.photos/id/84/200/200">
+                    <div class="image-item-inner">
+                        <img src="https://picsum.photos/id/84/400/400" alt="Architecture" loading="lazy">
+                    </div>
+                    <span class="image-label">Architecture</span>
+                </div>
+
+                <div class="image-item" data-cursor-img="https://picsum.photos/id/119/200/200">
+                    <div class="image-item-inner">
+                        <img src="https://picsum.photos/id/119/400/400" alt="Flowers" loading="lazy">
+                    </div>
+                    <span class="image-label">Flowers</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Video Previews -->
+        <section class="demo-section">
+            <h2>Video Previews</h2>
+            <p class="section-desc">Hover to play a preview — cursor expands into a mini player</p>
+
+            <div class="video-grid">
+                <div class="video-item" data-cursor-video>
+                    <video src="https://www.w3schools.com/html/mov_bbb.mp4" muted loop preload="metadata"></video>
+                    <div class="video-overlay">
+                        <div class="play-icon">▶</div>
+                    </div>
+                    <span class="video-label">Big Buck Bunny</span>
+                </div>
+
+                <div class="video-item" data-cursor-video>
+                    <video src="https://www.w3schools.com/html/movie.mp4" muted loop preload="metadata"></video>
+                    <div class="video-overlay">
+                        <div class="play-icon">▶</div>
+                    </div>
+                    <span class="video-label">Bear Video</span>
+                </div>
+
+                <div class="video-item" data-cursor-video>
+                    <video src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" muted loop preload="metadata"></video>
+                    <div class="video-overlay">
+                        <div class="play-icon">▶</div>
+                    </div>
+                    <span class="video-label">Flower Timelapse</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Mixed Interactions -->
+        <section class="demo-section">
+            <h2>Mixed Interactions</h2>
+            <p class="section-desc">Combining multiple cursor effects</p>
+
+            <div class="card-grid">
+                <div class="card card-gradient" data-cursor-stick data-cursor-text="Explore" data-cursor="-pointer">
+                    <div class="card-icon">🚀</div>
+                    <h3>Magnetic + Text</h3>
+                    <p>Cursor sticks and shows text</p>
+                </div>
+
+                <div class="card" data-cursor-text="Details →" data-cursor="-pointer">
+                    <div class="card-icon">📋</div>
+                    <h3>Text Cursor</h3>
+                    <p>Shows action text on hover</p>
+                </div>
+
+                <div class="card card-glow" data-cursor="-inverse">
+                    <div class="card-icon">💡</div>
+                    <h3>Glow + Inverse</h3>
+                    <p>Card glows, cursor inverts</p>
+                </div>
+
+                <div class="card card-outline-animated" data-cursor-stick data-cursor="-exclusion">
+                    <div class="card-icon">✨</div>
+                    <h3>Animated Border</h3>
+                    <p>Rotating gradient border with magnetic cursor</p>
+                </div>
+            </div>
+        </section>
     </main>
 
     <!-- Scripts - No external dependencies needed now -->

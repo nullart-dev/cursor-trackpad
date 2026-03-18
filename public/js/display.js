@@ -52,6 +52,7 @@ class Display {
             <div class="cursor-outer"></div>
             <div class="cursor-inner"></div>
             <div class="cursor-text"></div>
+            <div class="cursor-img"></div>
         `;
         document.body.appendChild(cursor);
 
@@ -59,6 +60,7 @@ class Display {
         this.cursorOuter = cursor.querySelector('.cursor-outer');
         this.cursorInner = cursor.querySelector('.cursor-inner');
         this.cursorText = cursor.querySelector('.cursor-text');
+        this.cursorImg = cursor.querySelector('.cursor-img');
 
         // Add styles
         const style = document.createElement('style');
@@ -126,6 +128,55 @@ class Display {
                 width: 60px;
                 height: 60px;
                 background: rgba(74, 158, 255, 0.2);
+            }
+            .cursor-img {
+                position: absolute;
+                transform: translate(-50%, -50%);
+                width: 0;
+                height: 0;
+                border-radius: 8px;
+                overflow: hidden;
+                opacity: 0;
+                transition: width 0.35s cubic-bezier(0.2, 0, 0, 1),
+                            height 0.35s cubic-bezier(0.2, 0, 0, 1),
+                            opacity 0.25s;
+                pointer-events: none;
+                box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+            }
+            .cursor-img img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                display: block;
+            }
+            .custom-cursor.has-img .cursor-outer {
+                width: 0;
+                height: 0;
+                border-color: transparent;
+                background: transparent;
+            }
+            .custom-cursor.has-img .cursor-inner {
+                opacity: 0;
+            }
+            .custom-cursor.has-img .cursor-img {
+                width: 120px;
+                height: 120px;
+                opacity: 1;
+            }
+            .custom-cursor.has-video .cursor-outer {
+                width: 0;
+                height: 0;
+                border-color: transparent;
+                background: transparent;
+            }
+            .custom-cursor.has-video .cursor-inner {
+                opacity: 0;
+            }
+            .custom-cursor.has-video .cursor-img {
+                width: 180px;
+                height: 100px;
+                border-radius: 10px;
+                opacity: 1;
             }
         `;
         document.head.appendChild(style);
@@ -388,7 +439,7 @@ class Display {
     // ==================== Hover State Detection ====================
 
     // Selector for elements that should receive .is-hovered
-    static HOVERABLE_SELECTOR = 'a, button, .demo-btn, .demo-link, .card, .image-item, [data-cursor-stick], [data-cursor-text], [data-cursor]';
+    static HOVERABLE_SELECTOR = 'a, button, .demo-btn, .demo-link, .card, .image-item, .video-item, [data-cursor-stick], [data-cursor-text], [data-cursor], [data-cursor-img], [data-cursor-video]';
 
     checkHoverState() {
         const element = document.elementFromPoint(this.cursorX, this.cursorY);
@@ -396,7 +447,10 @@ class Display {
         if (!element) {
             this.cursorEl.classList.remove('pointer');
             this.cursorEl.classList.remove('has-text');
+            this.cursorEl.classList.remove('has-img');
+            this.cursorEl.classList.remove('has-video');
             this.cursorEl.classList.remove('magnetic');
+            this.clearCursorMedia();
             this.simulateHover(null);
             return;
         }
@@ -420,6 +474,27 @@ class Display {
             this.cursorEl.classList.remove('has-text');
         }
 
+        // Check for cursor image preview
+        const imgEl = element.closest('[data-cursor-img]');
+        if (imgEl) {
+            const imgSrc = imgEl.getAttribute('data-cursor-img');
+            this.setCursorImage(imgSrc);
+            this.cursorEl.classList.add('has-img');
+            this.cursorEl.classList.remove('has-video');
+        } else {
+            this.cursorEl.classList.remove('has-img');
+
+            // Check for video preview (only if not already showing an image)
+            const videoEl = element.closest('[data-cursor-video]');
+            if (videoEl) {
+                this.setCursorVideo(videoEl);
+                this.cursorEl.classList.add('has-video');
+            } else {
+                this.cursorEl.classList.remove('has-video');
+                this.clearCursorMedia();
+            }
+        }
+
         // Check for magnetic/sticky
         const stickyEl = element.closest('[data-cursor-stick]');
         if (stickyEl) {
@@ -440,6 +515,53 @@ class Display {
         // Trigger hover — pass the resolved hoverable target (not the raw leaf element)
         // so that moving between <h3> and <p> inside the same .card doesn't cause flicker
         this.simulateHover(interactive || element);
+    }
+
+    // ==================== Cursor Media (Image/Video Preview) ====================
+
+    setCursorImage(src) {
+        // Only update if the source changed
+        if (this._currentImgSrc === src) return;
+        this._currentImgSrc = src;
+        this.cursorImg.innerHTML = `<img src="${src}" alt="">`;
+    }
+
+    setCursorVideo(videoItemEl) {
+        // Grab the video element from the hovered item
+        const video = videoItemEl.querySelector('video');
+        if (!video) return;
+
+        // Only update if it's a different video
+        if (this._currentVideoEl === video) return;
+        this._currentVideoEl = video;
+
+        // Create a cloned mini video in the cursor
+        const miniVideo = video.cloneNode(true);
+        miniVideo.muted = true;
+        miniVideo.loop = true;
+        miniVideo.playsInline = true;
+        miniVideo.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+        this.cursorImg.innerHTML = '';
+        this.cursorImg.appendChild(miniVideo);
+
+        // Play both the cursor preview and the original
+        try {
+            miniVideo.play();
+            video.play();
+        } catch (e) { /* autoplay may be blocked */ }
+    }
+
+    clearCursorMedia() {
+        if (this._currentImgSrc || this._currentVideoEl) {
+            // Pause any playing original video
+            if (this._currentVideoEl) {
+                this._currentVideoEl.pause();
+                this._currentVideoEl.currentTime = 0;
+            }
+            this._currentImgSrc = null;
+            this._currentVideoEl = null;
+            this.cursorImg.innerHTML = '';
+        }
     }
 
     simulateHover(element) {
