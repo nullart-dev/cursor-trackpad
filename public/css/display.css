@@ -6,7 +6,8 @@
 }
 
 html {
-    scroll-behavior: smooth;
+    /* scroll-behavior intentionally not set — we handle smooth scrolling 
+       programmatically in display.js to avoid conflicts with frequent scrollBy calls */
 }
 
 body {

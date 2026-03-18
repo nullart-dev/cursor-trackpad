@@ -20,6 +20,14 @@ class Display {
         this.currentX = this.cursorX;
         this.currentY = this.cursorY;
 
+        // Smooth scroll state
+        this.scrollTargetX = 0;      // accumulated target offset (not yet applied)
+        this.scrollTargetY = 0;
+        this.scrollCurrentX = 0;     // interpolated current offset
+        this.scrollCurrentY = 0;
+        this.lastScrollTarget = null; // the scrollable element or window currently being scrolled
+        this.scrollEase = 0.12;      // lerp factor — lower = smoother/slower (0.08–0.2 range)
+
         // WebSocket
         this.ws = null;
         this.reconnectAttempts = 0;
@@ -128,7 +136,7 @@ class Display {
 
     startRenderLoop() {
         const render = () => {
-            // Smooth interpolation (easing)
+            // ---- Cursor smooth interpolation ----
             const ease = 0.15;
             this.currentX += (this.cursorX - this.currentX) * ease;
             this.currentY += (this.cursorY - this.currentY) * ease;
@@ -145,6 +153,38 @@ class Display {
             // Apply skew based on velocity
             const skewAmount = Math.min(speed * 0.5, 20);
             this.cursorOuter.style.transform = `translate(-50%, -50%) rotate(${angle}deg) scaleX(${1 + skewAmount * 0.02}) scaleY(${1 - skewAmount * 0.01})`;
+
+            // ---- Smooth scroll interpolation ----
+            const scrollDx = this.scrollTargetX - this.scrollCurrentX;
+            const scrollDy = this.scrollTargetY - this.scrollCurrentY;
+            const scrollSpeed = Math.abs(scrollDx) + Math.abs(scrollDy);
+
+            if (scrollSpeed > 0.1) {
+                // Lerp toward target
+                this.scrollCurrentX += scrollDx * this.scrollEase;
+                this.scrollCurrentY += scrollDy * this.scrollEase;
+
+                // Calculate how much to scroll this frame
+                const applyX = this.scrollCurrentX;
+                const applyY = this.scrollCurrentY;
+
+                // Reset both — the "consumed" portion becomes the actual scroll
+                this.scrollTargetX -= applyX;
+                this.scrollTargetY -= applyY;
+                this.scrollCurrentX = 0;
+                this.scrollCurrentY = 0;
+
+                if (this.lastScrollTarget) {
+                    if (this.lastScrollTarget === window) {
+                        window.scrollBy(applyX, applyY);
+                    } else {
+                        this.lastScrollTarget.scrollBy(applyX, applyY);
+                    }
+                }
+
+                // Content moved under cursor — re-check hover
+                this.checkHoverState();
+            }
 
             // Update position display
             this.updatePositionDisplay();
@@ -301,27 +341,23 @@ class Display {
     }
 
     handleScroll(deltaX, deltaY) {
-        // Find scrollable element under cursor
+        // Determine scroll target (element or window)
         const element = document.elementFromPoint(this.cursorX, this.cursorY);
         const scrollable = this.findScrollableParent(element);
+        const target = scrollable || window;
 
-        if (scrollable) {
-            scrollable.scrollBy({
-                top: deltaY,
-                left: deltaX,
-                behavior: 'auto'
-            });
-        } else {
-            // Scroll the main window
-            window.scrollBy({
-                top: deltaY,
-                left: deltaX,
-                behavior: 'auto'
-            });
+        // If the scroll target changed, reset accumulated offsets
+        if (target !== this.lastScrollTarget) {
+            this.scrollTargetX = 0;
+            this.scrollTargetY = 0;
+            this.scrollCurrentX = 0;
+            this.scrollCurrentY = 0;
+            this.lastScrollTarget = target;
         }
 
-        // Content moved under cursor — re-check what we're hovering
-        this.checkHoverState();
+        // Accumulate into the target — the render loop will lerp toward it
+        this.scrollTargetX += deltaX;
+        this.scrollTargetY += deltaY;
     }
 
     findScrollableParent(element) {
