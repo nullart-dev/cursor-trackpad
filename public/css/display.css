@@ -453,59 +453,147 @@ header p {
     inherits: false;
 }
 
-/* ==================== Mouse Follower Customizations ==================== */
+/* ==================== Cursor State Classes (applied via data-cursor attribute) ==================== */
 
-.mf-cursor {
-    z-index: 10000;
-    pointer-events: none;
-}
-
-/* Inverse state - cursor becomes white with difference blend */
-.mf-cursor.-inverse {
+/* Inverse state — cursor becomes white circle with mix-blend-mode difference */
+.custom-cursor.-inverse .cursor-outer {
+    width: 60px;
+    height: 60px;
+    background: #fff;
+    border-color: transparent;
     mix-blend-mode: difference;
 }
 
-.mf-cursor.-inverse .mf-cursor-inner {
-    background: #fff !important;
+.custom-cursor.-inverse .cursor-inner {
+    opacity: 0;
 }
 
 /* Exclusion state */
-.mf-cursor.-exclusion {
+.custom-cursor.-exclusion .cursor-outer {
+    width: 60px;
+    height: 60px;
+    background: #fff;
+    border-color: transparent;
     mix-blend-mode: exclusion;
 }
 
-.mf-cursor.-exclusion .mf-cursor-inner {
-    background: #fff !important;
-}
-
-/* Media state */
-.mf-cursor.-media .mf-cursor-inner {
-    background: transparent;
-}
-
-/* Active/click state */
-.mf-cursor.-active .mf-cursor-inner {
-    transform: scale(0.8);
-}
-
-/* Pointer state - slightly larger */
-.mf-cursor.-pointer .mf-cursor-inner {
-    transform: scale(1.2);
-}
-
-/* Hidden state */
-.mf-cursor.-hidden {
+.custom-cursor.-exclusion .cursor-inner {
     opacity: 0;
-    visibility: hidden;
 }
 
-/* Text state adjustments */
-.mf-cursor.-text .mf-cursor-inner {
-    background: rgba(0, 0, 0, 0.8);
+/* Hidden state — cursor fades out */
+.custom-cursor.-hidden {
+    opacity: 0;
+    transition: opacity 0.3s;
 }
 
-.mf-cursor.-text .mf-cursor-text {
+.custom-cursor.-hidden .cursor-outer,
+.custom-cursor.-hidden .cursor-inner {
+    transform: translate(-50%, -50%) scale(0);
+}
+
+/* Pointer state — slightly larger (from data-cursor="-pointer") */
+.custom-cursor.-pointer .cursor-outer {
+    width: 50px;
+    height: 50px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* ==================== Magnetic Button (Cuberto-style) ==================== */
+
+[data-magnetic-btn] {
+    transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1);
+    will-change: transform;
+}
+
+.magnetic-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 56px;
+    font-size: 18px;
+    font-weight: 600;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 60px;
+    background: transparent;
     color: #fff;
+    text-decoration: none;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1),
+                border-color 0.3s,
+                background 0.3s;
+}
+
+.magnetic-btn:hover,
+.magnetic-btn.is-hovered {
+    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.magnetic-btn .btn-text {
+    position: relative;
+    z-index: 1;
+    transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.magnetic-btn .btn-fill {
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    border-radius: 60px;
+    transform: scale(0);
+    transition: transform 0.5s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.magnetic-btn:hover .btn-fill,
+.magnetic-btn.is-hovered .btn-fill {
+    transform: scale(1);
+}
+
+.magnetic-btn:hover .btn-text,
+.magnetic-btn.is-hovered .btn-text {
+    color: #000;
+}
+
+.magnetic-btn-row {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 40px 0;
+}
+
+.magnetic-btn.btn-accent {
+    border-color: #4a9eff;
+    color: #4a9eff;
+}
+
+.magnetic-btn.btn-accent .btn-fill {
+    background: #4a9eff;
+}
+
+.magnetic-btn.btn-accent:hover .btn-text,
+.magnetic-btn.btn-accent.is-hovered .btn-text {
+    color: #fff;
+}
+
+.magnetic-btn.btn-lg {
+    padding: 32px 72px;
+    font-size: 22px;
+    border-radius: 70px;
+}
+
+.magnetic-btn.btn-round {
+    width: 80px;
+    height: 80px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 24px;
+}
+
+.magnetic-btn.btn-round .btn-fill {
+    border-radius: 50%;
 }
 
 /* Responsive */

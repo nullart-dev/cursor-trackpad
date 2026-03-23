@@ -439,7 +439,7 @@ class Display {
     // ==================== Hover State Detection ====================
 
     // Selector for elements that should receive .is-hovered
-    static HOVERABLE_SELECTOR = 'a, button, .demo-btn, .demo-link, .card, .image-item, .video-item, [data-cursor-stick], [data-cursor-text], [data-cursor], [data-cursor-img], [data-cursor-video]';
+    static HOVERABLE_SELECTOR = 'a, button, .demo-btn, .demo-link, .card, .image-item, .video-item, [data-cursor-stick], [data-cursor-text], [data-cursor], [data-cursor-img], [data-cursor-video], [data-magnetic-btn]';
 
     checkHoverState() {
         const element = document.elementFromPoint(this.cursorX, this.cursorY);
@@ -450,6 +450,11 @@ class Display {
             this.cursorEl.classList.remove('has-img');
             this.cursorEl.classList.remove('has-video');
             this.cursorEl.classList.remove('magnetic');
+            if (this._activeCursorState) {
+                this.cursorEl.classList.remove(this._activeCursorState);
+                this._activeCursorState = null;
+            }
+            this.updateMagneticButton(null);
             this.clearCursorMedia();
             this.simulateHover(null);
             return;
@@ -512,6 +517,26 @@ class Display {
             this.cursorEl.classList.remove('magnetic');
         }
 
+        // Check for data-cursor state (e.g. -inverse, -hidden, -exclusion)
+        const cursorStateEl = element.closest('[data-cursor]');
+        const newCursorState = cursorStateEl ? cursorStateEl.getAttribute('data-cursor') : null;
+
+        if (newCursorState !== this._activeCursorState) {
+            // Remove previous state class
+            if (this._activeCursorState) {
+                this.cursorEl.classList.remove(this._activeCursorState);
+            }
+            // Add new state class
+            if (newCursorState) {
+                this.cursorEl.classList.add(newCursorState);
+            }
+            this._activeCursorState = newCursorState;
+        }
+
+        // Check for magnetic button (the button itself follows the cursor)
+        const magneticBtnEl = element.closest('[data-magnetic-btn]');
+        this.updateMagneticButton(magneticBtnEl);
+
         // Trigger hover — pass the resolved hoverable target (not the raw leaf element)
         // so that moving between <h3> and <p> inside the same .card doesn't cause flicker
         this.simulateHover(interactive || element);
@@ -562,6 +587,44 @@ class Display {
             this._currentVideoEl = null;
             this.cursorImg.innerHTML = '';
         }
+    }
+
+    // ==================== Cuberto-style Magnetic Button ====================
+    // The button itself physically moves toward the cursor, not just the cursor toward the button.
+
+    updateMagneticButton(btnEl) {
+        const prev = this._activeMagneticBtn;
+
+        if (prev && prev !== btnEl) {
+            // Reset the previously active magnetic button to its original position
+            prev.style.transform = '';
+            this._activeMagneticBtn = null;
+        }
+
+        if (!btnEl) return;
+
+        this._activeMagneticBtn = btnEl;
+
+        const rect = btnEl.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+
+        // How far the cursor is from the button center
+        const distX = this.cursorX - centerX;
+        const distY = this.cursorY - centerY;
+
+        // The button follows the cursor with a fraction of the distance
+        // Cuberto uses ~0.3–0.4 strength — the button moves 30-40% of the way toward the cursor
+        const strength = 0.35;
+        const moveX = distX * strength;
+        const moveY = distY * strength;
+
+        btnEl.style.transform = `translate(${moveX}px, ${moveY}px)`;
+
+        // Also make cursor magnetic (pull toward button center gently)
+        this.cursorEl.classList.add('magnetic');
+        this.cursorX += (centerX - this.cursorX) * 0.05;
+        this.cursorY += (centerY - this.cursorY) * 0.05;
     }
 
     simulateHover(element) {
