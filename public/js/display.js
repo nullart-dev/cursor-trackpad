@@ -28,6 +28,9 @@ class Display {
         this.lastScrollTarget = null; // the scrollable element or window currently being scrolled
         this.scrollEase = 0.12;      // lerp factor — lower = smoother/slower (0.08–0.2 range)
 
+        // Magnetic button options
+        this.cursorStickEnabled = true; // whether cursor pulls toward magnetic button center
+
         // WebSocket
         this.ws = null;
         this.reconnectAttempts = 0;
@@ -621,10 +624,12 @@ class Display {
 
         btnEl.style.transform = `translate(${moveX}px, ${moveY}px)`;
 
-        // Also make cursor magnetic (pull toward button center gently)
-        this.cursorEl.classList.add('magnetic');
-        this.cursorX += (centerX - this.cursorX) * 0.05;
-        this.cursorY += (centerY - this.cursorY) * 0.05;
+        // Only pull cursor toward button center if the stick toggle is on
+        if (this.cursorStickEnabled) {
+            this.cursorEl.classList.add('magnetic');
+            this.cursorX += (centerX - this.cursorX) * 0.05;
+            this.cursorY += (centerY - this.cursorY) * 0.05;
+        }
     }
 
     simulateHover(element) {
@@ -748,6 +753,15 @@ class Display {
             this.cursorX = Math.min(this.cursorX, window.innerWidth);
             this.cursorY = Math.min(this.cursorY, window.innerHeight);
         });
+
+        // Cursor-stick toggle switch
+        const toggle = document.getElementById('cursor-stick-toggle');
+        if (toggle) {
+            toggle.addEventListener('click', () => {
+                this.cursorStickEnabled = !this.cursorStickEnabled;
+                toggle.classList.toggle('active', this.cursorStickEnabled);
+            });
+        }
     }
 }
 
