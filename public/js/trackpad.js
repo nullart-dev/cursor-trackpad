@@ -8,9 +8,13 @@ class Trackpad {
         this.btnRight = document.getElementById('btn-right');
         this.sensitivityInput = document.getElementById('sensitivity');
         this.sensitivityValue = document.getElementById('sensitivity-value');
+        this.expandToggle = document.getElementById('expand-toggle');
+        this.settingsPanel = document.getElementById('settings');
+        this.appEl = document.getElementById('app');
 
         // Settings
-        this.sensitivity = 1.5;
+        this.sensitivity = 5;
+        this.settingsExpanded = false;
 
         // ==================== State Machine ====================
         // States: idle | pendingTap | dragging | twoFingerPending | scrolling
@@ -447,6 +451,14 @@ class Trackpad {
             this.saveSettings();
         });
 
+        // Expand/collapse settings toggle
+        this.expandToggle.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this.settingsExpanded = !this.settingsExpanded;
+            this.settingsPanel.classList.toggle('collapsed', !this.settingsExpanded);
+            this.appEl.classList.toggle('expanded', this.settingsExpanded);
+        });
+
         // Prevent context menu
         document.addEventListener('contextmenu', (e) => e.preventDefault());
     }
@@ -487,7 +499,9 @@ class Trackpad {
         const saved = localStorage.getItem('trackpad-settings');
         if (saved) {
             const settings = JSON.parse(saved);
-            this.sensitivity = settings.sensitivity || 1.5;
+            this.sensitivity = settings.sensitivity || 5;
+            // Clamp to new range in case old settings had a value outside 3-10
+            this.sensitivity = Math.max(3, Math.min(10, this.sensitivity));
             this.sensitivityInput.value = this.sensitivity;
             this.sensitivityValue.textContent = this.sensitivity.toFixed(1);
         }
